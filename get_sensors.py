@@ -172,7 +172,7 @@ async def check_pot():
                     async def call():
                         print(f"    Trying to connect to: {user_data}")
                         async with BleakClient(user_data, timeout= 60.0) as client:
-                            print(f"Watering...")
+                            print(f"    Watering...")
                             await client.write_gatt_char(CHAR_WATER_START, bytearray(b'\x08\x00'))
                             print(f"    Watering done")
                         
@@ -270,15 +270,6 @@ async def check_pot():
                 soil_temp.set_state(val)
             else:
                 print("            raw value = 0")
-
-            # if val < 30 and val != 0:
-            #     print("Water the plant")
-                # await client.write_gatt_char(CHAR_WATER_START, bytearray(b'\x08\x00'))
-
-            # await client.disconnect()
-
-# if __name__ == '__main__':
-#     asyncio.run(check_pot())
 
 while(1):
     try:
