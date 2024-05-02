@@ -54,7 +54,7 @@ async def check_pot():
     pots = await _search_for_pots()
     for pot in pots:
         print(f"    {pot}:")
-        async with BleakClient(pot,  timeout= 60.0) as client:
+        async with BleakClient(pot,  timeout= 120.0) as client:
             device_info = DeviceInfo(
                 name=pot.name,
                 identifiers=pot.address
@@ -171,7 +171,7 @@ async def check_pot():
                 def my_callback(client: Client, user_data, message: MQTTMessage):
                     async def call():
                         print(f"    Trying to connect to: {user_data}")
-                        async with BleakClient(user_data, timeout= 60.0) as client:
+                        async with BleakClient(user_data, timeout= 120.0) as client:
                             print(f"    Watering...")
                             await client.write_gatt_char(CHAR_WATER_START, bytearray(b'\x08\x00'))
                             print(f"    Watering done")
@@ -208,7 +208,7 @@ async def check_pot():
             
             print("        Get sunlight:")
             val = await client.read_gatt_char(CHAR_LIGHT_CAL)
-            val = int.from_bytes(val, byteorder='little', signed=False)
+            val = struct.unpack('f', val)[0]
             if (val != 0):
                 val = round(val) * 11.574 * 53.93 * 10.0
                 print(f"            Sun: {val:.2f} lx")
@@ -276,6 +276,6 @@ while(1):
         asyncio.run(check_pot())
     except:
         traceback.print_exc()
-    print("Wait 30min")
-    sleep(30*60)
+    print("Wait 15min")
+    sleep(15*60)
 
