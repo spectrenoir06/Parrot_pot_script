@@ -207,10 +207,10 @@ async def check_pot():
             battery.set_state(bat)
             
             print("        Get sunlight:")
-            val = await client.read_gatt_char(CHAR_LIGHT)
+            val = await client.read_gatt_char(CHAR_LIGHT_CAL)
             val = int.from_bytes(val, byteorder='little', signed=False)
             if (val != 0):
-                val = round(1000.0 * 0.08640000000000001 * (192773.17000000001 * pow(val, -1.0606619)))
+                val = round(val) * 11.574 * 53.93 * 10.0
                 print(f"            Sun: {val:.2f} lx")
                 sunlight.set_state(val)
             else:
