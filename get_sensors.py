@@ -6,7 +6,7 @@ from ha_mqtt_discoverable import Settings, DeviceInfo
 from ha_mqtt_discoverable.sensors import Sensor, SensorInfo, Button, ButtonInfo
 from paho.mqtt.client import Client, MQTTMessage
 from time import sleep
-import traceback 
+import traceback
 
 mqtt_settings = Settings.MQTT(
     host     = "",
@@ -14,6 +14,9 @@ mqtt_settings = Settings.MQTT(
     username = "",
     password = ""
 )
+
+class SensorInfoExtra(SensorInfo):
+    suggested_display_precision: int
 
 SERV_BAT          = "0000180f-0000-1000-8000-00805f9b34fb"
 CHAR_BAT          = "00002a19-0000-1000-8000-00805f9b34fb"
@@ -32,6 +35,13 @@ CHAR_SOIL_MOIST   = "39e1fa09-84a8-11e2-afba-0002a5d5c51b"
 CHAR_AIR_TEMP_CAL = "39e1fa0a-84a8-11e2-afba-0002a5d5c51b"
 CHAR_LIGHT_CAL    = "39e1fa0b-84a8-11e2-afba-0002a5d5c51b"
 
+# Other globals
+
+# Main asyncio event loop. Set by main().
+loop = None
+
+KNOWN_POTS = {}
+
 def map_range(x, in_min, in_max, out_min, out_max):
   return (x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
 
@@ -49,12 +59,11 @@ async def _search_for_pots():
         print(    "No Parrot pot has been found.")
     return ret
 
-KNOWN_POTS = {}
-
 # Initialize a pot and put the update function
 # in KNOWN_POTS
 def init_pot(pot):
     global KNOWN_POTS
+    address = pot.address
     # Initialize sensors, buttons, ...
 
     device_info = DeviceInfo(
@@ -64,11 +73,12 @@ def init_pot(pot):
     soil_moisture = Sensor(
         Settings(
             mqtt=mqtt_settings,
-            entity=SensorInfo(
+            entity=SensorInfoExtra(
                 name="Moisture",
                 device_class="moisture",
                 unit_of_measurement="%",
-                unique_id="soil_moisture",
+                suggested_display_precision=2,
+                unique_id="soil_moisture_" + address,
                 device=device_info
             )
         )
@@ -76,11 +86,12 @@ def init_pot(pot):
     water_volume = Sensor(
         Settings(
             mqtt=mqtt_settings,
-            entity=SensorInfo(
+            entity=SensorInfoExtra(
                 name="Water volume",
                 device_class="volume_storage",
                 unit_of_measurement="L",
-                unique_id="water_volume",
+                suggested_display_precision=2,
+                unique_id="water_volume_" + address,
                 device=device_info
             )
         )
@@ -88,11 +99,12 @@ def init_pot(pot):
     water_volume_perc = Sensor(
         Settings(
             mqtt=mqtt_settings,
-            entity=SensorInfo(
+            entity=SensorInfoExtra(
                 name="Water volume %",
                 device_class="volume_storage",
                 unit_of_measurement="%",
-                unique_id="water_volume_perc",
+                suggested_display_precision=2,
+                unique_id="water_volume_perc_" + address,
                 device=device_info
             )
         )
@@ -100,11 +112,12 @@ def init_pot(pot):
     soil_conduct = Sensor(
         Settings(
             mqtt=mqtt_settings,
-            entity=SensorInfo(
+            entity=SensorInfoExtra(
                 name="Soil conductivity",
                 # device_class="volume_storage",
                 unit_of_measurement="uS/cm",
-                unique_id="soil_conduct",
+                suggested_display_precision=2,
+                unique_id="soil_conduct_" + address,
                 device=device_info
             )
         )
@@ -112,11 +125,12 @@ def init_pot(pot):
     sunlight = Sensor(
         Settings(
             mqtt=mqtt_settings,
-            entity=SensorInfo(
+            entity=SensorInfoExtra(
                 name="Illuminance",
                 device_class="illuminance",
                 unit_of_measurement="lx",
-                unique_id="illuminance",
+                suggested_display_precision=2,
+                unique_id="illuminance_" + address,
                 device=device_info
             )
         )
@@ -128,7 +142,7 @@ def init_pot(pot):
                 name="battery",
                 device_class="battery",
                 unit_of_measurement="%",
-                unique_id="battery",
+                unique_id="battery_" + address,
                 device=device_info
             )
         )
@@ -136,11 +150,12 @@ def init_pot(pot):
     air_temp = Sensor(
         Settings(
             mqtt=mqtt_settings,
-            entity=SensorInfo(
+            entity=SensorInfoExtra(
                 name="Air temperature",
                 device_class="temperature",
                 unit_of_measurement="°C",
-                unique_id="air_temp",
+                suggested_display_precision=2,
+                unique_id="air_temp_" + address,
                 device=device_info
             )
         )
@@ -148,11 +163,12 @@ def init_pot(pot):
     soil_temp = Sensor(
         Settings(
             mqtt=mqtt_settings,
-            entity=SensorInfo(
+            entity=SensorInfoExtra(
                 name="Soil temperature",
                 device_class="temperature",
                 unit_of_measurement="°C",
-                unique_id="soil_temp",
+                suggested_display_precision=2,
+                unique_id="soil_temp_" + address,
                 device=device_info
             )
         )
@@ -169,28 +185,30 @@ def init_pot(pot):
             
         print(f"Water plant: {user_data}")
         try:
-            asyncio.run(call())
+            future = asyncio.run_coroutine_threadsafe(call(), loop)
+            future.result()
         except:
             traceback.print_exc()
 
-    user_data = pot.address
     my_button = Button(
         Settings(
             mqtt=mqtt_settings,
             entity=ButtonInfo(
-                name="water plants",
-                unique_id="water_plants",
+                name="Water plant",
+                unique_id="water_plant_" + address,
                 device=device_info
             )
         ),
         my_callback,
-        user_data
+        address # user_data
     )
     my_button.write_config()
 
     # update function for this pot
+    pot = None
     async def update():
-        async with BleakClient(pot.address, timeout= 120.0) as client:
+        print(f"    Connect to: {address}")
+        async with BleakClient(address, timeout= 120.0) as client:
             print("        Get bat:")
             bat = await client.read_gatt_char(CHAR_BAT)
             bat = int.from_bytes(bat, byteorder='little', signed=False)
@@ -262,31 +280,31 @@ def init_pot(pot):
             else:
                 print("            raw value = 0")
 
-    KNOWN_POTS[pot.address] = update
+    KNOWN_POTS[address] = update
 
 async def check_pot():
     pots = await _search_for_pots()
     for pot in pots:
         print(f"    {pot}:")
-
         if pot.address not in KNOWN_POTS:
             init_pot(pot)
-
-        update = KNOWN_POTS[pot.address]
+    for funct in KNOWN_POTS.values():
         try:
-            await update()
+            await funct()
         except:
             traceback.print_exc()
         sleep(10)
 
 async def main():
+    global loop
+    loop = asyncio.get_event_loop()
     while(1):
         try:
             await check_pot()
         except:
             traceback.print_exc()
         print("Wait 15min")
-        sleep(15*60)
+        await asyncio.sleep(15*60)
 
 if __name__ == "__main__":
     asyncio.run(main())
