@@ -9,7 +9,7 @@ from time import sleep
 import traceback 
 
 mqtt_settings = Settings.MQTT(
-    host     = "192.168.1.4",
+    host     = "",
     port     = 1883,
     username = "",
     password = ""
@@ -190,7 +190,7 @@ def init_pot(pot):
 
     # update function for this pot
     async def update():
-        async with BleakClient(pot, timeout= 120.0) as client:
+        async with BleakClient(pot.address, timeout= 120.0) as client:
             print("        Get bat:")
             bat = await client.read_gatt_char(CHAR_BAT)
             bat = int.from_bytes(bat, byteorder='little', signed=False)
@@ -273,7 +273,11 @@ async def check_pot():
             init_pot(pot)
 
         update = KNOWN_POTS[pot.address]
-        await update()
+        try:
+            await update()
+        except:
+            traceback.print_exc()
+        sleep(10)
 
 async def main():
     while(1):
