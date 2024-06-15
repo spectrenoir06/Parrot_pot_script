@@ -9,8 +9,11 @@ from ha_mqtt_discoverable.sensors import Sensor, SensorInfo, Button, ButtonInfo
 from paho.mqtt.client import Client, MQTTMessage
 from time import sleep
 import traceback
+from time import perf_counter
+
 
 mqtt_settings = Settings.MQTT(
+
 )
 
 class SensorInfoExtra(SensorInfo):
@@ -313,20 +316,28 @@ async def check_pot():
         except:
             traceback.print_exc()
 
+next_read = 0
+next_water = 0
+
 async def main():
     global loop
     global to_water
+    global next_water
+    global next_read
     loop = asyncio.get_event_loop()
     while(1):
-        for key, value in list(to_water.items()):
-            await value()
-        to_water = {}
-        try:
-            await check_pot()
-        except:
-            traceback.print_exc()
-        print("\n    Wait 10min")
-        await asyncio.sleep(10*60)
+        if (next_water < perf_counter()):
+            for key, value in list(to_water.items()):
+                await value()
+            to_water = {}
+            next_water = perf_counter() + 30
+        if (next_read < perf_counter()):
+            try:
+                await check_pot()
+            except:
+                traceback.print_exc()
+            next_read = perf_counter() + 60 * 20
+        await asyncio.sleep(30)
 
 if __name__ == "__main__":
     asyncio.run(main())
